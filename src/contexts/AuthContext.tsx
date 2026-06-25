@@ -28,60 +28,76 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const getSession = async () => {
+    let isMounted = true;
+
+    const fetchProfile = async (userId: string) => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (isMounted && data) {
+        setProfile(data as Profile);
+      }
+    };
+
+    const fetchGoals = async (userId: string) => {
+      const { data } = await supabase
+        .from('user_goals')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+      if (isMounted && data) {
+        setGoals(data as UserGoals);
+      }
+    };
+
+    const init = async () => {
       const {
         data: { session },
       } = await supabase.auth.getSession();
+
+      if (!isMounted) return;
+
       setSession(session);
       setUser(session?.user ?? null);
+
       if (session?.user) {
-        await fetchProfile(session.user.id);
-        await fetchGoals(session.user.id);
+        await Promise.all([
+          fetchProfile(session.user.id),
+          fetchGoals(session.user.id),
+        ]);
       }
+
       setLoading(false);
     };
 
-    getSession();
+    init();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!isMounted) return;
+
       setSession(session);
       setUser(session?.user ?? null);
+
       if (session?.user && event !== 'PASSWORD_RECOVERY') {
-        await fetchProfile(session.user.id);
-        await fetchGoals(session.user.id);
+        fetchProfile(session.user.id);
+        fetchGoals(session.user.id);
       } else {
         setProfile(null);
         setGoals(null);
       }
-      setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
-
-  const fetchProfile = async (userId: string) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
-    if (!error && data) {
-      setProfile(data as Profile);
-    }
-  };
-
-  const fetchGoals = async (userId: string) => {
-    const { data, error } = await supabase
-      .from('user_goals')
-      .select('*')
-      .eq('user_id', userId)
-      .single();
-    if (!error && data) {
-      setGoals(data as UserGoals);
-    }
-  };
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -96,6 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         emailRedirectTo: window.location.origin,
       },
     });
+
     return { error, user: data.user };
   };
 
@@ -111,6 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
+
     return { error };
   };
 
@@ -120,11 +138,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const refreshProfile = async () => {
-    if (user) await fetchProfile(user.id);
+    if (user) {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (data) setProfile(data as Profile);
+    }
   };
 
   const refreshGoals = async () => {
-    if (user) await fetchGoals(user.id);
+    if (user) {
+      const { data } = await supabase
+        .from('user_goals')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (data) setGoals(data as UserGoals);
+    }
   };
 
   return (
