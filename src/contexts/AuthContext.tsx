@@ -30,8 +30,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
   let isMounted = true;
 
-  const fetchProfileAndGoals = async (userId: string) => {
-    await Promise.all([
+  const fetchProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error) {
+        console.log("PROFILE ERROR:", error);
+        return;
+      }
+
+      if (isMounted) {
+        setProfile(data as Profile | null);
+      }
+    } catch (err) {
+      console.log("PROFILE CATCH:", err);
+    }
+  };
+
+  const fetchGoals = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('user_goals')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (error) {
+        console.log("GOALS ERROR:", error);
+        return;
+      }
+
+      if (isMounted) {
+        setGoals(data as UserGoals | null);
+      }
+    } catch (err) {
+      console.log("GOALS CATCH:", err);
+    }
+  };
+
+  const loadUserData = async (userId: string) => {
+    await Promise.allSettled([
       fetchProfile(userId),
       fetchGoals(userId),
     ]);
@@ -41,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { data, error } = await supabase.auth.getSession();
 
-      console.log("🔥 INIT SESSION:", data?.session, error);
+      console.log("INIT SESSION:", data?.session, error);
 
       if (!isMounted) return;
 
@@ -51,10 +93,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ?? null);
 
       if (session?.user) {
-        await fetchProfileAndGoals(session.user.id);
+        await loadUserData(session.user.id);
       }
     } catch (err) {
-      console.error("INIT AUTH ERROR:", err);
+      console.log("INIT AUTH ERROR:", err);
     } finally {
       if (isMounted) setLoading(false);
     }
@@ -66,20 +108,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (event, session) => {
       if (!isMounted) return;
 
-      console.log("🔥 AUTH CHANGE:", event, session);
+      console.log("AUTH EVENT:", event, session);
 
       setSession(session);
       setUser(session?.user ?? null);
 
-      if (session?.user) {
-        await fetchProfileAndGoals(session.user.id);
+      if (session?.user && event !== 'PASSWORD_RECOVERY') {
+        await loadUserData(session.user.id);
       } else {
         setProfile(null);
         setGoals(null);
       }
 
-      // IMPORTANTE: garante que app sai do loading em login futuro
-      if (loading) setLoading(false);
+      setLoading(false);
     }
   );
 
