@@ -111,23 +111,55 @@ export function Foods() {
   };
 
   const handleSave = async () => {
-    if (!user || !formData) return;
-    setSaving(true);
+  if (!user || !formData) return;
 
+  setSaving(true);
+
+  try {
     if (editingFood) {
-      const updateData = { ...formData, updated_at: new Date().toISOString() };
+      const updateData: any = {
+        ...formData,
+        updated_at: new Date().toISOString(),
+      };
+
       delete updateData.user_id;
-      delete (updateData as { id?: string }).id;
-      await supabase.from('foods').update(updateData).eq('id', editingFood.id);
+      delete updateData.id;
+
+      const { error } = await supabase
+        .from('foods')
+        .update(updateData)
+        .eq('id', editingFood.id);
+
+      if (error) {
+        console.error('ERRO UPDATE FOOD:', error);
+        alert(error.message);
+        return;
+      }
     } else {
-      await supabase.from('foods').insert({ ...formData, user_id: user.id });
+      const insertData = {
+        ...formData,
+        user_id: user.id,
+      };
+
+      const { error } = await supabase
+        .from('foods')
+        .insert(insertData);
+
+      if (error) {
+        console.error('ERRO INSERT FOOD:', error);
+        alert(error.message);
+        return;
+      }
     }
 
-    setSaving(false);
     setShowModal(false);
     setEditingFood(null);
     fetchFoods();
-  };
+
+  } finally {
+    setSaving(false);
+  }
+};
 
   const handleDelete = async (foodId: string) => {
     if (!confirm('Excluir este alimento?')) return;
