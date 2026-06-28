@@ -28,76 +28,66 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let isMounted = true;
+  let isMounted = true;
 
-    const fetchProfile = async (userId: string) => {
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+  const fetchProfileAndGoals = async (userId: string) => {
+    await Promise.all([
+      fetchProfile(userId),
+      fetchGoals(userId),
+    ]);
+  };
 
-      if (isMounted && data) {
-        setProfile(data as Profile);
-      }
-    };
+  const init = async () => {
+    try {
+      const { data, error } = await supabase.auth.getSession();
 
-    const fetchGoals = async (userId: string) => {
-      const { data } = await supabase
-        .from('user_goals')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-
-      if (isMounted && data) {
-        setGoals(data as UserGoals);
-      }
-    };
-
-    const init = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      console.log("🔥 INIT SESSION:", data?.session, error);
 
       if (!isMounted) return;
+
+      const session = data.session;
 
       setSession(session);
       setUser(session?.user ?? null);
 
       if (session?.user) {
-        await Promise.all([
-          fetchProfile(session.user.id),
-          fetchGoals(session.user.id),
-        ]);
+        await fetchProfileAndGoals(session.user.id);
       }
+    } catch (err) {
+      console.error("INIT AUTH ERROR:", err);
+    } finally {
+      if (isMounted) setLoading(false);
+    }
+  };
 
-      setLoading(false);
-    };
+  init();
 
-    init();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+  const { data } = supabase.auth.onAuthStateChange(
+    async (event, session) => {
       if (!isMounted) return;
+
+      console.log("🔥 AUTH CHANGE:", event, session);
 
       setSession(session);
       setUser(session?.user ?? null);
 
-      if (session?.user && event !== 'PASSWORD_RECOVERY') {
-        fetchProfile(session.user.id);
-        fetchGoals(session.user.id);
+      if (session?.user) {
+        await fetchProfileAndGoals(session.user.id);
       } else {
         setProfile(null);
         setGoals(null);
       }
-    });
 
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-    };
-  }, []);
+      // IMPORTANTE: garante que app sai do loading em login futuro
+      if (loading) setLoading(false);
+    }
+  );
+
+  return () => {
+    isMounted = false;
+    data.subscription.unsubscribe();
+  };
+}, []);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
