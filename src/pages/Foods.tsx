@@ -5,21 +5,21 @@ import type { Food, FoodInsert } from '../types/database';
 import { Plus, Search, Edit2, Trash2, Star, X, Loader2 } from 'lucide-react';
 
 const FOOD_CATEGORIES = [
-  'Proteins',
-  'Carbohydrates',
-  'Fruits',
-  'Vegetables',
-  'Dairy',
-  'Nuts & Seeds',
-  'Legumes',
-  'Beverages',
-  'Snacks',
-  'Other',
+  'Proteínas',
+  'Carboidratos',
+  'Frutas',
+  'Vegetais',
+  'Laticínios',
+  'Oleaginosas',
+  'Leguminosas',
+  'Bebidas',
+  'Lanches',
+  'Outros',
 ];
 
 const blankFood: Omit<FoodInsert, 'user_id'> & { user_id?: string } = {
   name: '',
-  category: 'Other',
+  category: 'Outros',
   serving_unit: 'g',
   serving_size: 100,
   calories: 0,
