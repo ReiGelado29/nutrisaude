@@ -27,106 +27,75 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [goals, setGoals] = useState<UserGoals | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+ useEffect(() => {
   let isMounted = true;
 
   const fetchProfile = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
 
-      if (error) {
-        console.log("PROFILE ERROR:", error);
-        return;
-      }
-
-      if (isMounted) {
-        setProfile(data as Profile | null);
-      }
-    } catch (err) {
-      console.log("PROFILE CATCH:", err);
+    if (isMounted && data) {
+      setProfile(data as Profile);
     }
   };
 
   const fetchGoals = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('user_goals')
-        .select('*')
-        .eq('user_id', userId)
-        .maybeSingle();
+    const { data } = await supabase
+      .from('user_goals')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
 
-      if (error) {
-        console.log("GOALS ERROR:", error);
-        return;
-      }
-
-      if (isMounted) {
-        setGoals(data as UserGoals | null);
-      }
-    } catch (err) {
-      console.log("GOALS CATCH:", err);
+    if (isMounted && data) {
+      setGoals(data as UserGoals);
     }
-  };
-
-  const loadUserData = async (userId: string) => {
-    await Promise.allSettled([
-      fetchProfile(userId),
-      fetchGoals(userId),
-    ]);
   };
 
   const init = async () => {
-    try {
-      const { data, error } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
 
-      console.log("INIT SESSION:", data?.session, error);
+    if (!isMounted) return;
 
-      if (!isMounted) return;
+    setSession(session);
+    setUser(session?.user ?? null);
 
-      const session = data.session;
-
-      setSession(session);
-      setUser(session?.user ?? null);
-
-      if (session?.user) {
-        await loadUserData(session.user.id);
-      }
-    } catch (err) {
-      console.log("INIT AUTH ERROR:", err);
-    } finally {
-      if (isMounted) setLoading(false);
+    if (session?.user) {
+      await Promise.all([
+        fetchProfile(session.user.id),
+        fetchGoals(session.user.id),
+      ]);
     }
+
+    setLoading(false);
   };
 
   init();
 
-  const { data } = supabase.auth.onAuthStateChange(
-    async (event, session) => {
-      if (!isMounted) return;
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange((event, session) => {
+    if (!isMounted) return;
 
-      console.log("AUTH EVENT:", event, session);
+    setSession(session);
+    setUser(session?.user ?? null);
 
-      setSession(session);
-      setUser(session?.user ?? null);
-
-      if (session?.user && event !== 'PASSWORD_RECOVERY') {
-        await loadUserData(session.user.id);
-      } else {
-        setProfile(null);
-        setGoals(null);
-      }
-
-      setLoading(false);
+    if (session?.user && event !== 'PASSWORD_RECOVERY') {
+      fetchProfile(session.user.id);
+      fetchGoals(session.user.id);
+    } else {
+      setProfile(null);
+      setGoals(null);
     }
-  );
+  });
 
   return () => {
     isMounted = false;
-    data.subscription.unsubscribe();
+    subscription.unsubscribe();
   };
 }, []);
 
